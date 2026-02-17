@@ -290,6 +290,7 @@ input[type="text"] {
 .mic-btn {
   color: var(--primary-sage) !important;
   margin-right: 8px;
+  margin-left: 4px;
 }
 
 .mic-btn.recording {
