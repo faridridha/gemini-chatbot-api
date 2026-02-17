@@ -9,12 +9,14 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+// Revert to original constructor pattern for @google/genai
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-const GEMINI_MODEL = "gemini-2.5-flash";
+// Using this preview model as standard models (gemini-1.5-flash) are returning 404 for this project
+const GEMINI_MODEL = "gemini-robotics-er-1.5-preview";
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '20mb' })); // Keep the limit fix
 app.use(express.static(path.join(__dirname, 'public')));
 
 const PORT = 3000;
@@ -27,11 +29,10 @@ app.post('/api/chat', async (req, res) => {
         if (!Array.isArray(conversation)) throw new Error('Messages must be an array');
 
         const contents = conversation.map(({ role, text }) => ({
-            role,
+            role: role === 'model' ? 'model' : 'user',
             parts: [{ text }]
         }));
 
-        // If audio is present, add it to the last user message or as a new turn
         if (audio) {
             contents.push({
                 role: 'user',
@@ -47,6 +48,7 @@ app.post('/api/chat', async (req, res) => {
             });
         }
 
+        // Revert to ai.models.generateContent pattern but keep updated logic
         const response = await ai.models.generateContent({
             model: GEMINI_MODEL,
             contents,
@@ -55,9 +57,12 @@ app.post('/api/chat', async (req, res) => {
                 systemInstruction: 'Anda adalah seorang guru ngaji Al-Quran yang ahli Tajwid. Tugas Anda adalah menyapa pengguna, menjawab pertanyaan tentang Al-Quran, dan mengoreksi bacaan mereka jika mereka mengirimkan suara. Berikan koreksi yang detail: sebutkan hurufnya, cara baca yang benar, dan hukum tajwidnya. Gunakan huruf Arab, cara baca (transliterasi), dan arti dalam bahasa Indonesia. Gunakan markdown untuk memformat jawabanmu agar rapi dan mudah dibaca.'
             }
         });
+
+        // In this SDK, response is typically the result object
+        // Based on previous code, use response.text
         res.status(200).json({ result: response.text });
     } catch (e) {
-        console.log(e.message);
-        res.status(500).json({ error: e.message })
+        console.error('Error in /api/chat:', e);
+        res.status(500).json({ error: e.message });
     }
 });
