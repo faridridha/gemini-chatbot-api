@@ -1,87 +1,170 @@
 const chatForm = document.getElementById('chat-form');
 const chatBox = document.getElementById('chat-box');
 const userInput = document.getElementById('user-input');
+const themeToggle = document.getElementById('theme-toggle');
+const micBtn = document.getElementById('mic-btn');
+const stopMicBtn = document.getElementById('stop-mic');
+const recordStatus = document.getElementById('record-status');
+const body = document.body;
 
 // Initialize conversation history
 let conversation = [];
+let mediaRecorder;
+let audioChunks = [];
 
-chatForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
+// --- Dark Mode Logic ---
+const savedTheme = localStorage.getItem('theme') || 'light';
+body.setAttribute('data-theme', savedTheme);
+updateThemeIcon(savedTheme);
 
-  const text = userInput.value.trim();
-  if (!text) return;
+themeToggle.addEventListener('click', () => {
+  const currentTheme = body.getAttribute('data-theme');
+  const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+  body.setAttribute('data-theme', newTheme);
+  localStorage.setItem('theme', newTheme);
+  updateThemeIcon(newTheme);
+});
 
-  // 1. Add user message to chat box
-  appendMessage('user', text);
+function updateThemeIcon(theme) {
+  const icon = themeToggle.querySelector('i');
+  if (theme === 'dark') {
+    icon.classList.replace('fa-moon', 'fa-sun');
+  } else {
+    icon.classList.replace('fa-sun', 'fa-moon');
+  }
+}
 
-  // Update conversation history for the API
-  conversation.push({ role: 'user', text: text });
-
-  userInput.value = '';
-
-  // Disable input while processing
-  const submitButton = chatForm.querySelector('button');
-  userInput.disabled = true;
-  submitButton.disabled = true;
-
-  // 2. Show temporary "Thinking..." message
-  const loadingMessage = appendMessage('bot', 'Thinking...');
-
+// --- Voice Recording Logic ---
+micBtn.addEventListener('click', async () => {
   try {
-    // 3. Send POST request to backend
-    const response = await fetch('/api/chat', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ conversation })
-    });
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    mediaRecorder = new MediaRecorder(stream);
+    audioChunks = [];
 
-    if (!response.ok) {
-      throw new Error(`Server error: ${response.status}`);
-    }
+    mediaRecorder.ondataavailable = (event) => {
+      audioChunks.push(event.data);
+    };
 
-    const data = await response.json();
+    mediaRecorder.onstop = async () => {
+      const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+      const reader = new FileReader();
+      reader.readAsDataURL(audioBlob);
+      reader.onloadend = () => {
+        const base64Audio = reader.result.split(',')[1];
+        sendChatMessage(null, base64Audio);
+      };
 
-    // 4. Replace "Thinking..." with AI response
-    if (data.result) {
-      loadingMessage.innerText = data.result;
+      // Stop all tracks to free up the microphone
+      stream.getTracks().forEach(track => track.stop());
+    };
 
-      // Update history with model response
-      conversation.push({ role: 'model', text: data.result });
-    } else {
-      loadingMessage.innerText = 'Sorry, no response received.';
-    }
-
-  } catch (error) {
-    console.error('Error fetching chat response:', error);
-    loadingMessage.innerText = 'Failed to get response from server.';
-  } finally {
-    // Re-enable input
-    userInput.disabled = false;
-    submitButton.disabled = false;
-    userInput.focus();
-
-    // Ensure we are scrolled to bottom after the text update
-    scrollToBottom();
+    mediaRecorder.start();
+    micBtn.classList.add('recording');
+    recordStatus.classList.remove('hidden');
+    userInput.placeholder = "Merekam suara...";
+    userInput.disabled = true;
+  } catch (err) {
+    console.error("Gagal mengakses microphone:", err);
+    alert("Gagal mengakses microphone. Pastikan izin diberikan.");
   }
 });
 
-function appendMessage(sender, text) {
+stopMicBtn.addEventListener('click', () => {
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.stop();
+    micBtn.classList.remove('recording');
+    recordStatus.classList.add('hidden');
+    userInput.placeholder = "Ketik pesan atau rekam suara...";
+    userInput.disabled = false;
+  }
+});
+
+// --- Chat Logic ---
+chatForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const text = userInput.value.trim();
+  if (!text) return;
+  sendChatMessage(text);
+});
+
+async function sendChatMessage(text, audioBase64 = null) {
+  if (!text && !audioBase64) return;
+
+  // 1. UI Updates
+  if (text) {
+    appendMessage('user', text);
+    conversation.push({ role: 'user', text: text });
+    userInput.value = '';
+  } else if (audioBase64) {
+    appendMessage('user', '🎤 [Pesan Suara]');
+    // Record audio in conversation too? 
+    // For Gemini API thread consistency, we send it as part of the next turn
+  }
+
+  const submitBtn = document.getElementById('send-btn');
+  userInput.disabled = true;
+  submitBtn.disabled = true;
+  micBtn.disabled = true;
+
+  const loadingMessageObj = appendMessage('bot', '<span class=\"thinking\">Sedang mendengarkan & berpikir... <i class=\"fas fa-ellipsis-h\"></i></span>');
+
+  try {
+    const payload = { conversation };
+    if (audioBase64) {
+      payload.audio = audioBase64;
+    }
+
+    const response = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+    const data = await response.json();
+
+    if (data.result) {
+      loadingMessageObj.element.innerHTML = marked.parse(data.result);
+      conversation.push({ role: 'model', text: data.result });
+    } else {
+      loadingMessageObj.element.innerText = 'Maaf, tidak ada respon yang diterima.';
+    }
+  } catch (error) {
+    console.error('Fetch error:', error);
+    loadingMessageObj.element.innerText = 'Gagal menghubungi server. Silakan coba lagi.';
+  } finally {
+    userInput.disabled = false;
+    submitBtn.disabled = false;
+    micBtn.disabled = false;
+    userInput.focus();
+    scrollToBottom();
+  }
+}
+
+function appendMessage(sender, htmlContent) {
+  const wrapper = document.createElement('div');
+  wrapper.classList.add('message-wrapper', `${sender}-wrapper`);
+
   const messageDiv = document.createElement('div');
   messageDiv.classList.add('message', sender);
-  messageDiv.innerText = text; // using innerText for safety against HTML injection
 
-  // Clear floats hacks if necessary, but with the current CSS 
-  // (floats inside a container with overflow: auto), simply appending is fine.
-  // However, because they are floated, we might want a clearing element or ensure container handles it.
-  // The provided CSS has .chat-box { overflow-y: auto }, which handles floats (BFC).
+  if (sender === 'user') {
+    messageDiv.innerText = htmlContent;
+  } else {
+    messageDiv.innerHTML = htmlContent;
+  }
 
-  chatBox.appendChild(messageDiv);
+  wrapper.appendChild(messageDiv);
+  chatBox.appendChild(wrapper);
   scrollToBottom();
-  return messageDiv; // Return the element so we can update it later
+
+  return { wrapper, element: messageDiv };
 }
 
 function scrollToBottom() {
-  chatBox.scrollTop = chatBox.scrollHeight;
+  chatBox.scrollTo({
+    top: chatBox.scrollHeight,
+    behavior: 'smooth'
+  });
 }

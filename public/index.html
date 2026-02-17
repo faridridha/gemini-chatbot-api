@@ -4,18 +4,60 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Gemini AI Chatbot</title>
+  <title>Gemini AI Chatbot - Teman Ngaji</title>
+  <!-- Google Fonts: Inter & Amiri for Arabic-style vibes -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Amiri:wght@400;700&display=swap"
+    rel="stylesheet">
+  <!-- Font Awesome for Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link rel="stylesheet" href="style.css" />
+  <!-- Marked.js for Markdown -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 
 <body>
+  <div class="bg-pattern"></div>
   <div class="container">
-    <h1>Gemini AI Chatbot</h1>
-    <div id="chat-box" class="chat-box"></div>
-    <form id="chat-form">
-      <input type="text" id="user-input" placeholder="Type your message..." autocomplete="off" required />
-      <button type="submit">Send</button>
-    </form>
+    <header>
+      <div class="header-content">
+        <div class="logo">
+          <i class="fas fa-mosque"></i>
+          <h1>Gemini Teman Ngaji</h1>
+        </div>
+        <button id="theme-toggle" class="icon-btn" aria-label="Toggle Dark Mode">
+          <i class="fas fa-moon"></i>
+        </button>
+      </div>
+    </header>
+
+    <main id="chat-box" class="chat-box">
+      <!-- Welcome message -->
+      <div class="message-wrapper bot-wrapper">
+        <div class="message bot">
+          <p>Assalamu'alaikum! Saya adalah Gemini Teman Ngajimu. Ingin murojaah atau ziyadah apa hari ini?</p>
+        </div>
+      </div>
+    </main>
+
+    <footer class="footer">
+      <form id="chat-form">
+        <div class="input-wrapper">
+          <button type="button" id="mic-btn" class="icon-btn mic-btn" title="Rekam Suara">
+            <i class="fas fa-microphone"></i>
+          </button>
+          <input type="text" id="user-input" placeholder="Ketik pesan atau rekam suara..." autocomplete="off"
+            required />
+          <button type="submit" id="send-btn" class="send-btn">
+            <i class="fas fa-paper-plane"></i>
+          </button>
+        </div>
+      </form>
+      <div id="record-status" class="record-status hidden">
+        <span class="pulse-dot"></span>
+        <span class="status-text">Merekam...</span>
+        <button type="button" id="stop-mic" class="stop-btn">Selesai</button>
+      </div>
+    </footer>
   </div>
   <script src="script.js"></script>
 </body>
